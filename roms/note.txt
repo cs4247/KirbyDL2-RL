@@ -1,0 +1,1 @@
+put your "Kirby's Dream Land 2" rom here and rename it "kirby2.gb"
