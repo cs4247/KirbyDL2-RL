@@ -102,8 +102,8 @@ class KirbyGymEnv(gym.Env):
         
         screen = current_state.screen
         screen_greyscale = 0.2989 * screen[:, :, 0] + 0.5870 * screen[:, :, 1] + 0.1140 * screen[:, :, 2]
-        self.frames = np.roll(self.frames, -1, axis=0)
-        self.frames[-1] = screen_greyscale
+        updated_frames = np.vstack((self.frames[1:], screen_greyscale[np.newaxis, ...]))
+        self.frames = updated_frames
         observation = self.frames
 
         self.last_state = current_state
@@ -115,8 +115,8 @@ class KirbyGymEnv(gym.Env):
         self.last_state = self.kirby_game.get_observation()
         screen = self.last_state.screen
         screen_greyscale = 0.2989 * screen[:, :, 0] + 0.5870 * screen[:, :, 1] + 0.1140 * screen[:, :, 2]
-        self.frames = np.roll(self.frames, -1, axis=0)
-        self.frames[-1] = screen_greyscale
+        updated_frames = np.vstack((self.frames[1:], screen_greyscale[np.newaxis, ...]))
+        self.frames = updated_frames
         observation = self.frames
         return observation
 

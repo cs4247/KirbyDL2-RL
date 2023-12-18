@@ -36,7 +36,8 @@ for episode in range(episodes):
         actionId = player.act(observation)
         action = actions[actionId]
         next_observation, reward, done, info = env.step(action)
-
+        print(next_observation.shape)
+        
         player.cache(observation, next_observation, actionId, reward, done)
         q, loss = player.learn()
         logger.log_step(reward, loss, q, player.scheduler.get_last_lr())
