@@ -20,10 +20,13 @@ class KirbyGymEnv(gym.Env):
                                             dtype=np.uint8)
         
         self.kirby_game: KirbysDreamland2 = KirbysDreamland2('roms/kirby2.gb', window_type="headless")
-        self.game_state = game_state_file
-        self.kirby_game.load_state(game_state_file)
+        self.game_state_file = game_state_file
+        game_state = open(game_state_file, "rb")
+        self.kirby_game.load_state(game_state)
+        game_state.close()
         self.last_state = self.kirby_game.get_observation()
         self.boss_fight = boss_fight
+        self.frames = np.zeros((4,144,160))
 
         #From PyBoy/openai_gym
         self._buttons = [
@@ -84,12 +87,12 @@ class KirbyGymEnv(gym.Env):
                     self._button_is_pressed[release] = False
 
             # press buttons we want to press
-            for buttonToPress in self.get_actions():
+            for buttonToPress in actions:
                 self.kirby_game.send_input(buttonToPress)
                 self._button_is_pressed[buttonToPress] = True # update status of the button
 
         current_state = self.kirby_game.get_observation()
-        reward = self._calculate_reward(current_state, self.game_state)
+        reward = self._calculate_reward(current_state, self.last_state)
         game_done = current_state.game_over
         if self.boss_fight:
             game_done = not current_state.boss_active
@@ -97,15 +100,24 @@ class KirbyGymEnv(gym.Env):
             game_done = current_state.boss_active or current_state.level_id == 20 #20 is the minigame after every level
         done = pyboy_done or game_done
         
-        observation = current_state.screen
+        screen = current_state.screen
+        screen_greyscale = 0.2989 * screen[:, :, 0] + 0.5870 * screen[:, :, 1] + 0.1140 * screen[:, :, 2]
+        self.frames = np.roll(self.frames, -1, axis=0)
+        self.frames[-1] = screen_greyscale
+        observation = self.frames
 
         self.last_state = current_state
         return observation, reward, done, info
 
     def reset(self):
-        self.kirby_game.load_state(self.game_state)
+        game_state = open(self.game_state_file, "rb")
+        self.kirby_game.load_state(game_state)
         self.last_state = self.kirby_game.get_observation()
-        observation = self.last_state.screen
+        screen = self.last_state.screen
+        screen_greyscale = 0.2989 * screen[:, :, 0] + 0.5870 * screen[:, :, 1] + 0.1140 * screen[:, :, 2]
+        self.frames = np.roll(self.frames, -1, axis=0)
+        self.frames[-1] = screen_greyscale
+        observation = self.frames
         return observation
 
     def render(self, mode='human'):

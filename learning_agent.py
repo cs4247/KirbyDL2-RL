@@ -1,14 +1,12 @@
-from dataclasses import dataclass
 from collections import deque
 import random
 import sys
 import numpy as np
 import torch
-from model import DDQN
+from model import DeepQN
 
 #These are the exact same parameters and settings from PyBoy-RL's kirby
 
-@dataclass
 class LearningParameters():
     def __init__(self):
         self.exploration_rate = 1
@@ -17,7 +15,7 @@ class LearningParameters():
 
         self.deque_size = 500000
         self.batch_size = 64
-        self.save_every = 1e3
+        self.save_every = 1e4
 
         self.gamma = 0.8
         self.learning_rate = 0.0002
@@ -39,7 +37,7 @@ class AIKirby:
         if torch.cuda.is_available():
             self.device = "cuda"
         
-        self.net = DDQN(self.state_dim, self.action_space_dim).to(device=self.device)
+        self.net = DeepQN(self.state_dim, self.action_space_dim).to(device=self.device)
 
         self.exploration_rate = self.params.exploration_rate 
         self.exploration_rate_decay = self.params.exploration_rate_decay
@@ -48,7 +46,7 @@ class AIKirby:
 
         self.memory = deque(maxlen=self.params.deque_size)
         self.batch_size = self.params.batch_size
-        self.save_every = self.params.save_every  # no. of experiences between saving the Network
+        self.save_every = self.params.save_every
 
         self.gamma = self.params.gamma
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=self.params.learning_rate)
