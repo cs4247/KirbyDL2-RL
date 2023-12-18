@@ -6,7 +6,6 @@ import torch
 from model import DeepQN
 
 #These are the exact same parameters and settings from PyBoy-RL's kirby
-
 class LearningParameters():
     def __init__(self):
         self.exploration_rate = 1
@@ -24,7 +23,7 @@ class LearningParameters():
         self.learn_every = 3  
         self.sync_every = 100
 
-#Based on pytorch RL tutorial by yfeng997 used on Mario and Kirby's dreamland 1 in PyBoy-RL
+#Based on pytorch RL tutorial by yfeng997 used on Mario and Kirby's Dreamland 1 in PyBoy-RL
 class AIKirby:
 
     def __init__(self, state_dim, action_space_dim, save_dir, date):
@@ -56,101 +55,146 @@ class AIKirby:
         self.learn_every = self.params.learn_every 
         self.sync_every = self.params.sync_every
 
-    #Standart q-learning methods, same as in PyBoy-RL/agent
     def act(self, state):
-            # EXPLORE
-            if (random.random() < self.exploration_rate):
-                actionIdx = random.randint(0, self.action_space_dim-1)
-            # EXPLOIT
-            else:
-                state = np.array(state)
-                state = torch.tensor(state).float().to(device=self.device)
-                state = state.unsqueeze(0)
-                
+        # Decide between exploration and exploitation
+        if random.random() < self.exploration_rate:
+            # Exploration: choose a random action
+            action_idx = random.randint(0, self.action_space_dim - 1)
+        else:
+            # Exploitation: choose the best action based on current knowledge
 
-                neuralNetOutput = self.net(state, model="online")
-                actionIdx = torch.argmax(neuralNetOutput, axis=1).item()
+            # Convert state to tensor and process for neural network input
+            state_tensor = torch.tensor(np.array(state), dtype=torch.float).to(self.device)
+            state_tensor = state_tensor.unsqueeze(0)
 
-            # decrease exploration_rate
-            self.exploration_rate *= self.exploration_rate_decay
-            self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
+            # Obtain the output from the neural network
+            neural_net_output = self.net(state_tensor, model="online")
 
-            # increment step
-            self.curr_step += 1
+            # Select the action with the highest value
+            action_idx = torch.argmax(neural_net_output, axis=1).item()
 
-            return actionIdx
+        # Decrease exploration rate according to the decay factor
+        self.exploration_rate *= self.exploration_rate_decay
+        self.exploration_rate = max(self.exploration_rate_min, self.exploration_rate)
+
+        # Increment the step counter
+        self.curr_step += 1
+
+        return action_idx
 
 
     def cache(self, state, next_state, action, reward, done):
+        # Convert states, action, reward, and done flag to numpy arrays
         state = np.array(state)
         next_state = np.array(next_state)
 
-        state = torch.tensor(state).float().to(device=self.device)
-        next_state = torch.tensor(next_state).float().to(device=self.device)
-        action = torch.tensor([action]).to(device=self.device)
-        reward = torch.tensor([reward]).to(device=self.device)
-        done = torch.tensor([done]).to(device=self.device)
+        # Convert to PyTorch tensors and move to the specified device
+        state_tensor = torch.tensor(state).float().to(self.device)
+        next_state_tensor = torch.tensor(next_state).float().to(self.device)
+        action_tensor = torch.tensor([action]).to(self.device)
+        reward_tensor = torch.tensor([reward]).to(self.device)
+        done_tensor = torch.tensor([done]).to(self.device)
 
-        self.memory.append((state, next_state, action, reward, done))
+        # Append the experience to the memory buffer
+        self.memory.append((state_tensor, next_state_tensor, action_tensor, reward_tensor, done_tensor))
+
 
     def recall(self):
+        # Randomly sample a batch of experiences from memory
         batch = random.sample(self.memory, self.batch_size)
+
+        # Separate the batch into individual components
+        # torch.stack is used to concatenate a sequence of tensors along a new dimension
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
+
+        # Squeeze the tensors to remove any extra dimensions (of size 1)
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
+
     def learn(self):
+        # Synchronize the Q-target network with the Q-online network periodically
         if self.curr_step % self.sync_every == 0:
             self.sync_Q_target()
 
+        # Save the model periodically
         if self.curr_step % self.save_every == 0:
             self.save()
 
+        # Wait until enough experiences are collected before starting training
         if self.curr_step < self.burnin:
             return None, None
 
+        # Learn only at specified intervals
         if self.curr_step % self.learn_every != 0:
             return None, None
 
-        # Sample from memory get self.batch_size number of memories
+        # Sample a batch of experiences from memory
         state, next_state, action, reward, done = self.recall()
 
-        # Get TD Estimate, make predictions for the each memory
+        # Get the current Q-value estimates for the sampled states and actions
         td_est = self.td_estimate(state, action)
 
-        # Get TD Target make predictions for next state of each memory
+        # Calculate the target Q-values for the sampled next states
         td_tgt = self.td_target(reward, next_state, done)
 
-        # Backpropagate loss through Q_online
+        # Update the Q-online network by backpropagating the loss
         loss = self.update_Q_online(td_est, td_tgt)
 
+        # Return the mean TD estimate and the loss for logging purposes
         return (td_est.mean().item(), loss)
 
+
     def update_Q_online(self, td_estimate, td_target):
+        # Calculate the loss between the TD estimate and TD target
         loss = self.loss_fn(td_estimate, td_target)
+
+        # Zero the gradients to prepare for a new gradient calculation
         self.optimizer.zero_grad()
+
+        # Backpropagate the loss through the network
         loss.backward()
+
+        # Perform a single optimization step to update the network weights
         self.optimizer.step()
 
-        self.scheduler.step() #
+        # Update the learning rate using the scheduler
+        self.scheduler.step()
 
+        # Return the loss value for logging or debugging
         return loss.item()
 
+
     def sync_Q_target(self):
+        # Copy the weights from the online network to the target network
         self.net.target.load_state_dict(self.net.online.state_dict())
 
-    def td_estimate(self, state, action):
 
+    def td_estimate(self, state, action):
+        """
+            Output is batch_size number of rewards = Q_online(s,a) * 32
+        """
         modelOutPut = self.net(state, model="online")
         current_Q = modelOutPut[np.arange(0, self.batch_size), action]  # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()
     def td_target(self, reward, next_state, done):
+        # Get Q-value estimates for the next states using the online model
+        next_state_Q = self.net(next_state, model="online")
 
-        next_state_Q = self.net(next_state, model="online") 
-        best_action = torch.argmax(next_state_Q, axis=1) # argmax_a'( Q_online(s',a') ) 
-        next_Q = self.net(next_state, model="target")[np.arange(0, self.batch_size), best_action] # Q_target(s', argmax_a'( Q_online(s',a') ) )
-        return (reward + (1 - done.float()) * self.gamma * next_Q).float() # Q*(s,a)
+        # Find the best action for each next state according to the online model
+        best_action = torch.argmax(next_state_Q, axis=1)
+
+        # Get Q-values for these best actions from the target model
+        # This combines the selection of actions using the online network
+        # with the evaluation of these actions using the target network
+        next_Q = self.net(next_state, model="target")[np.arange(0, self.batch_size), best_action]
+
+        # Compute the TD target: reward + gamma * Q-value of the next state,
+        # only updating the non-terminal states (where done is False)
+        td_target = (reward + (1 - done.float()) * self.gamma * next_Q).float()
+
+        return td_target
 
     def loadModel(self, path):
         dt = torch.load(path, map_location=torch.device(self.device))

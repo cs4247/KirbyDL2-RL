@@ -42,7 +42,6 @@ for episode in range(episodes):
         q, loss = player.learn()
         logger.log_step(reward, loss, q, player.scheduler.get_last_lr())
         observation = next_observation
-        steps += 1
         if done or time.time() - start > 500:
             break
 
