@@ -4,7 +4,7 @@ import torch
 import numpy
 
 # based on Mario pytorch tutorial by yfeng997, implemented mostly the same was as the last kirby project in Pyboy-RL/model.py
-# This was changed only to support the new input frame of the full screen of shape (4,144,160) with finer image features
+# This was changed only to support the new input frame of the full screen of shape (4,144/2,160/2) with finer image features
 
 class DeepQN(nn.Module):
     def __init__(self, input_dim, output_dim):

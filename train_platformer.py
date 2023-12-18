@@ -27,6 +27,7 @@ print(f"Actions: {actions}")
 player = AIKirby((4,144,160), len(actions), save_dir, now)
 logger = MetricLogger(save_dir)
 player.saveHyperParameters()
+player.net.train()
 
 for episode in range(episodes):
     print(f"Episode {episode} of {episodes}")
@@ -41,6 +42,7 @@ for episode in range(episodes):
         q, loss = player.learn()
         logger.log_step(reward, loss, q, player.scheduler.get_last_lr())
         observation = next_observation
+        steps += 1
         if done or time.time() - start > 500:
             break
 

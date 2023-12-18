@@ -58,14 +58,6 @@ class AIKirby:
 
     #Standart q-learning methods, same as in PyBoy-RL/agent
     def act(self, state):
-            """
-                Given a state, choose an epsilon-greedy action and update value of step.
-
-                Inputs:
-                state(LazyFrame): A single observation of the current state, dimension is (state_dim)
-                Outputs:
-                action_idx (int): An integer representing the action
-            """
             # EXPLORE
             if (random.random() < self.exploration_rate):
                 actionIdx = random.randint(0, self.action_space_dim-1)
@@ -90,16 +82,6 @@ class AIKirby:
 
 
     def cache(self, state, next_state, action, reward, done):
-        """
-        Store the experience to self.memory (replay buffer)
-
-        Inputs:
-        state (LazyFrame),
-        next_state (LazyFrame),
-        action (int),
-        reward (float),
-        done(bool))
-        """
         state = np.array(state)
         next_state = np.array(next_state)
 
@@ -112,15 +94,11 @@ class AIKirby:
         self.memory.append((state, next_state, action, reward, done))
 
     def recall(self):
-        """
-        Retrieve a batch of experiences from memory
-        """
         batch = random.sample(self.memory, self.batch_size)
         state, next_state, action, reward, done = map(torch.stack, zip(*batch))
         return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
 
     def learn(self):
-        """Update online action value (Q) function with a batch of experiences"""
         if self.curr_step % self.sync_every == 0:
             self.sync_Q_target()
 
@@ -161,18 +139,14 @@ class AIKirby:
         self.net.target.load_state_dict(self.net.online.state_dict())
 
     def td_estimate(self, state, action):
-        """
-            Output is batch_size number of rewards = Q_online(s,a) * 32
-        """
+
         modelOutPut = self.net(state, model="online")
         current_Q = modelOutPut[np.arange(0, self.batch_size), action]  # Q_online(s,a)
         return current_Q
 
     @torch.no_grad()
     def td_target(self, reward, next_state, done):
-        """
-            Output is batch_size number of Q*(s,a) = r + (1-done) * gamma * Q_target(s', argmax_a'( Q_online(s',a') ) )
-        """
+
         next_state_Q = self.net(next_state, model="online") 
         best_action = torch.argmax(next_state_Q, axis=1) # argmax_a'( Q_online(s',a') ) 
         next_Q = self.net(next_state, model="target")[np.arange(0, self.batch_size), best_action] # Q_target(s', argmax_a'( Q_online(s',a') ) )

@@ -9,14 +9,14 @@ class KirbyGymEnv(gym.Env):
     #Image parameters
     HEIGHT = 144
     WIDTH = 160
-    CHANNELS = 3
+    CHANNELS = 4
     
     def __init__(self, game_state_file, boss_fight = False):
         super(KirbyGymEnv, self).__init__()
         self.action_space = spaces.Discrete(len(self.get_actions())) # Replace N with the number of actions
         # Using the screen as observation
         self.observation_space = spaces.Box(low=0, high=255, 
-                                            shape=(KirbyGymEnv.HEIGHT,KirbyGymEnv.WIDTH, KirbyGymEnv.CHANNELS), 
+                                            shape=(KirbyGymEnv.CHANNELS, KirbyGymEnv.HEIGHT,KirbyGymEnv.WIDTH), 
                                             dtype=np.uint8)
         
         self.kirby_game: KirbysDreamland2 = KirbysDreamland2('roms/kirby2.gb', window_type="headless")
@@ -91,14 +91,16 @@ class KirbyGymEnv(gym.Env):
                 self.kirby_game.send_input(buttonToPress)
                 self._button_is_pressed[buttonToPress] = True # update status of the button
 
+            pyboy_done = self.kirby_game.tick()
+
         current_state = self.kirby_game.get_observation()
         reward = self._calculate_reward(current_state, self.last_state)
-        game_done = current_state.game_over
+        dead = current_state.game_over
         if self.boss_fight:
             game_done = not current_state.boss_active
         else:
             game_done = current_state.boss_active or current_state.level_id == 20 #20 is the minigame after every level
-        done = pyboy_done or game_done
+        done = pyboy_done or game_done or dead
         
         screen = current_state.screen
         screen_greyscale = 0.2989 * screen[:, :, 0] + 0.5870 * screen[:, :, 1] + 0.1140 * screen[:, :, 2]
@@ -108,20 +110,41 @@ class KirbyGymEnv(gym.Env):
 
         self.last_state = current_state
         return observation, reward, done, info
+    
+    def _downsample_frame(self, frame):
+        """
+        Downsample the image by the given factor.
+        Assumes the image dimensions are divisible by the factor.
+        """
+        factor = 2
+        # Check if image dimensions are divisible by the factor
+        if frame.shape[0] % factor != 0 or frame.shape[1] % factor != 0:
+            raise ValueError("Image dimensions must be divisible by the downscaling factor.")
+
+        # Downsample the image
+        downsampled_image = frame.reshape(frame.shape[0]//factor, factor,
+                                        frame.shape[1]//factor, factor).mean(axis=(1, 3))
+
+        return downsampled_image
+
 
     def reset(self):
         game_state = open(self.game_state_file, "rb")
         self.kirby_game.load_state(game_state)
+        game_state.close()
         self.last_state = self.kirby_game.get_observation()
-        screen = self.last_state.screen
-        screen_greyscale = 0.2989 * screen[:, :, 0] + 0.5870 * screen[:, :, 1] + 0.1140 * screen[:, :, 2]
-        updated_frames = np.vstack((self.frames[1:], screen_greyscale[np.newaxis, ...]))
-        self.frames = updated_frames
+        self.frames = np.zeros((4,144,160))
         observation = self.frames
+
+        #Button handling from PyboyRL
+        for pressedFromBefore in [pressed for pressed in self._button_is_pressed if self._button_is_pressed[pressed] == True]: # get all buttons currently pressed
+            self.kirby_game.send_input(self._release_button[pressedFromBefore])
+        self.button_is_pressed = {button: False for button in self._buttons}
+
         return observation
 
     def render(self, mode='human'):
-        print(self.kirby_game)
+       pass
 
     def _calculate_reward(self, current_state: GameState, last_state: GameState):
         if not self.boss_fight:
@@ -178,4 +201,4 @@ class KirbyGymEnv(gym.Env):
             return -5 #Decrease reward as time goes on to incentivise quicker episodes
 
     def close(self):
-        pass
+        self.kirby_game.stop(save=False)
