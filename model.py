@@ -14,21 +14,21 @@ class DeepQN(nn.Module):
         # Building the online network with adjusted convolutional layers for larger input
         self.online = nn.Sequential(
             # First convolutional layer with more channels and larger kernel for bigger image size
-            nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4, padding=2),
+            nn.Conv2d(in_channels=c, out_channels=16, kernel_size=8, stride=4, padding=2),
             nn.ReLU(),  # ReLU activation function to introduce non-linearity
 
             # Second convolutional layer with increased number of channels for more complex feature extraction
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),  # ReLU activation
 
             # Third convolutional layer with same number of channels but smaller kernel for finer feature extraction
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),  # ReLU activation
 
             nn.Flatten(),  # Flattening the output of conv layers to feed into linear layers
 
             # First linear layer; input features are dynamically calculated based on conv layer output
-            nn.Linear(23040, 512),
+            nn.Linear(11520, 512),
             nn.ReLU(), 
             nn.Linear(512, output_dim)
         )
